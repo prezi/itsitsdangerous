@@ -14,7 +14,7 @@ and here is related and really nice blogpost by the same Author:
 
 http://www.lunaryorn.com/2014/04/15/calling-python-from-haskell.html
 
-### FFI
+### Testing
 To run tests:
 
     cabal install --enable-tests
