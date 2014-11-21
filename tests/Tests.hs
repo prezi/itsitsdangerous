@@ -43,11 +43,11 @@ testSignWithCustomSeparator =
         \sep s p -> let m = rawMessage $ signWithSeparatorAndSalt sep defaultSalt s p in m == signOrigWithSeparator sep s p
 
 
-testItsDangerousAPI :: TestTree
-testItsDangerousAPI = testGroup "ItsDangerous API" [ testSign, testSignWithCustomSeparator ]
+testSignFunctions :: TestTree
+testSignFunctions = testGroup "ItsDangerous sign functions" [ testSign, testSignWithCustomSeparator ]
 
 tests :: TestTree
-tests = testGroup "ItsItsDangerous" [ testSign, testSignWithCustomSeparator ]
+tests = testGroup "ItsItsDangerous" [ testSignFunctions ]
 
 main :: IO ()
 main = defaultMain tests
