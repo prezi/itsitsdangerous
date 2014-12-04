@@ -1,7 +1,7 @@
 itsitsdangerous
 ===============
 
-Minimal Haskell clone of Python's `itsdangerous` library.
+Minimal Haskell clone of Python's `itsdangerous` library. It allows you to easily interact with services signed with original library.
 
 ## Python bindings and testing
 
