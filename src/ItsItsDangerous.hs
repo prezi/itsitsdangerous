@@ -1,35 +1,44 @@
-{-# LANGUAGE EmptyDataDecls, OverloadedStrings #-}
+{-# LANGUAGE CPP, EmptyDataDecls, OverloadedStrings #-}
 module ItsItsDangerous
-       (attachTimestamp, defaultSalt, defaultSeparator, rawMessage, sign, signWithSalt,
-        signWithSeparatorAndSalt, signWithTimestampAndSeparator, Message,
-        extractTimestamp, Signed, Unsigned, Separator, Secret, base64encode,
-        base64decode, int2bytes, base64encode)
+       (attachTimestamp, defaultSalt, defaultSeparator, sign, signWithSalt,
+        signWithSeparatorAndSalt, signWithTimestampAndSeparator,
+        extractMessageAndTimestamp, Separator, Secret, base64encode,
+        base64decode, int2bytes, base64encode, unsignTimestampped, signWithTimestamp)
        where
 
-import            Crypto.Hash.SHA1       (hash)
-import            Control.Applicative    ((<$>))
-import            Control.Monad          (mfilter)
-import qualified  Data.ByteString        as BS
-import            Data.ByteString        (append, ByteString, pack, spanEnd, breakSubstring, unpack)
-import qualified  Data.ByteString.Base64
-import            Data.ByteString.Lazy   (toStrict)
-import            Data.ByteString.Search (replace)
-import            Data.ByteString.UTF8   (fromString, toString)
-import            Data.Bits              (shiftL, shiftR, (.|.), (.&.))
-import            Data.Char              (ord, isDigit)
-import            Data.HMAC              (hmac_sha1)
-import            Text.Read              (readMaybe)
+import           Control.Applicative      ((<$>))
+import           Control.Monad            (mfilter)
+import           Crypto.Hash.SHA1         (hash)
+import           Data.Bits                (shiftL, shiftR, (.&.), (.|.))
+import           Data.ByteString          (ByteString, append, breakSubstring,
+                                           pack, spanEnd, unpack)
+import qualified Data.ByteString          as BS
+import qualified Data.ByteString.Base64
+import qualified Data.ByteString.Unsafe   as BSU
+import           Data.ByteString.Lazy     (toStrict)
+import           Data.ByteString.Search   (replace)
+import           Data.ByteString.UTF8     (fromString, toString)
+import           Data.Char                (isDigit, ord)
+import           Data.HMAC                (hmac_sha1)
+import           Data.Maybe               (maybe)
+import           Text.Read                (readMaybe)
 
 type Secret    = ByteString
 type Separator = ByteString
 type Salt      = ByteString
 type Key       = ByteString
 
-data Signed
-data Unsigned
+type Plain     = ByteString
+type Encrypted = ByteString
 
-data Message a = Message { rawMessage :: ByteString }
-                 deriving (Eq, Show)
+-- data Message = Message
+--     { plain :: Plain
+--     , encrypted :: Encrypted
+--     }
+-- 
+-- data MessageWithTimestamp = {message :: Message
+--                             ,timestamp :: Timestamp
+--                             }
 
 -- itsdangerous url safe version of base64 encoding/decoding
 -- replace in encoded string:
@@ -66,25 +75,24 @@ defaultSalt = "itsdangerous.Signer"
 defaultSeparator :: ByteString
 defaultSeparator = "."
 
-signWithSeparatorAndSalt :: Separator -> Salt -> Secret -> ByteString -> Message Signed
-signWithSeparatorAndSalt separator salt secret plain =
-  Message $ plain `append` separator `append` m
-  where
-  c = BS.pack $ hmac_sha1 (unpack (derivateKey salt secret)) (unpack plain)
-  m = base64encode c
+signature :: Salt -> Secret -> ByteString -> ByteString
+signature salt secret plain =
+    base64encode . BS.pack $ hmac_sha1 (unpack (derivateKey salt secret)) (unpack plain)
 
-signWithSalt :: Salt -> Secret -> ByteString -> Message Signed
+signWithSeparatorAndSalt :: Separator -> Salt -> Secret -> ByteString -> Encrypted
+signWithSeparatorAndSalt separator salt secret plain =
+    plain `append` separator `append` signature salt secret plain
+
+signWithSalt :: Salt -> Secret -> ByteString -> Encrypted
 signWithSalt = signWithSeparatorAndSalt defaultSeparator
 
-sign :: Secret -> ByteString -> Message Signed
+sign :: Secret -> ByteString -> Encrypted
 sign = signWithSalt defaultSalt
 
-epoch :: Integer
-epoch = 1293840000
+type Timestamp = Integer
 
-attachTimestamp :: Integer -> Separator -> ByteString -> ByteString
-attachTimestamp timestamp separator plain =
-  plain `append` separator `append` (base64encode . int2bytes . (\x -> x - epoch) $ timestamp)
+epoch :: Timestamp
+epoch = 1293840000
 
 bytes2int :: ByteString -> Integer
 bytes2int = BS.foldl (\b a -> shiftL b 8 .|. (toInteger a)) 0
@@ -95,14 +103,68 @@ int2bytes = pack . reverse . int2bytes'
   int2bytes' y | y <= 0 = []
                | otherwise = (fromInteger $ y .&. 0xff) : int2bytes' (shiftR y 8)
 
-extractTimestamp :: Separator -> ByteString -> ByteString -> Maybe Integer
-extractTimestamp separator plain plainWithSeparator = do
-  let t = BS.drop (BS.length separator + BS.length plain) $ plainWithSeparator
-  t' <- either (const Nothing) Just . base64decode $ t
-  return . (epoch +) . bytes2int $ t'
+attachTimestamp :: Timestamp -> Separator -> ByteString -> ByteString
+attachTimestamp timestamp separator plain =
+    plain `append` separator `append`
+    (base64encode .  int2bytes .  (\x -> x - epoch) $ timestamp)
 
-signWithTimestampAndSeparator :: Integer -> Separator -> Secret -> ByteString -> Message Signed
+rsplit :: Separator  -- ^ String to search for.
+       -> ByteString -- ^ String to search in.
+       -> Maybe (ByteString, ByteString) -- ^ prefix and sufix without separator
+rsplit separator buffer | separator `seq` buffer `seq` False = undefined
+rsplit separator buffer = do
+    i <- rsplit' buffer 0 Nothing
+    return (BS.take i buffer, BS.drop (i + BS.length separator) buffer)
+  where
+    rsplit' :: ByteString -> Int -> Maybe Int -> Maybe Int
+    rsplit' b c i
+        | BS.null b                   = i
+        | separator `BS.isPrefixOf` b = rsplit' (BSU.unsafeTail b) (c+1) (Just c)
+        | otherwise                   = rsplit' (BSU.unsafeTail b) (c+1) i
+
+
+extractMessageAndTimestamp :: Separator -> ByteString -> Maybe (Plain, Timestamp)
+extractMessageAndTimestamp separator plain = do
+    (p, t) <- rsplit separator plain
+    t' <- either (const Nothing) Just .  base64decode $ t
+    return . ((,) p) . (epoch +) . bytes2int $ t'
+
+signWithTimestampAndSeparator :: Timestamp -> Separator -> Secret -> Plain -> Encrypted
 signWithTimestampAndSeparator timestamp separator secret plain =
     let plain' =
             attachTimestamp timestamp separator plain
     in signWithSeparatorAndSalt separator defaultSalt secret plain'
+
+signWithTimestamp :: Timestamp -> Secret -> Plain -> Encrypted
+signWithTimestamp timestamp = signWithTimestampAndSeparator timestamp defaultSeparator
+
+type HasExpired = Timestamp -> Bool
+data UnsingError = SignatureExpired | BadSignature
+                   deriving (Eq, Show)
+
+unsign :: Separator -> Salt -> Secret -> Encrypted -> Either UnsingError Plain
+unsign separator salt secret encrypted =
+    maybe (Left BadSignature)
+          (\(v, s) -> if validate v s
+                          then Right v
+                          else Left BadSignature)
+          (rsplit separator encrypted)
+  where
+    validate :: Plain -> Encrypted -> Bool
+    validate plain = (signature salt secret plain ==)
+
+
+unsignTimestamppedWithSeparatorAndSalt :: HasExpired -> Separator -> Salt -> Secret -> ByteString -> Either UnsingError Plain
+unsignTimestamppedWithSeparatorAndSalt hasExpired separator salt secret encrypted = do -- unsign separator salt secret encrypted
+    plain <- unsign separator salt secret encrypted
+    let m = extractMessageAndTimestamp separator $ plain
+    maybe
+        (Left BadSignature)
+        (\(p, t) ->
+              if hasExpired t
+                  then Left SignatureExpired
+                  else return p)
+        m
+
+unsignTimestampped :: HasExpired -> Secret -> Encrypted -> Either UnsingError Plain
+unsignTimestampped hasExpired = unsignTimestamppedWithSeparatorAndSalt hasExpired defaultSeparator defaultSalt

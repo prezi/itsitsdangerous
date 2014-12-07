@@ -7,10 +7,10 @@ import Foreign.Python
        (callObject, fromPy, getAttr, importModule, initialize, toPy,
         PyObject)
 import ItsItsDangerous
-       (defaultSalt, Separator, Secret, defaultSeparator, rawMessage,
-        sign, signWithSeparatorAndSalt, extractTimestamp, base64decode,
+       (defaultSalt, Separator, Secret, defaultSeparator,
+        sign, signWithSeparatorAndSalt, extractMessageAndTimestamp, base64decode,
         base64encode, signWithTimestampAndSeparator, attachTimestamp,
-        int2bytes)
+        int2bytes, signWithTimestamp, unsignTimestampped)
 import System.IO.Unsafe (unsafePerformIO)
 import Test.QuickCheck (Arbitrary, arbitrary)
 import Test.Tasty (TestTree, defaultMain, testGroup)
@@ -61,18 +61,14 @@ timestampSignOrigWithSeparator separator secret plain =
 
 testSign :: TestTree
 testSign =
-    testProperty "sign s p == orignSign s p" $ \s p -> let m = rawMessage $ sign s p in m == signOrig s p
+    testProperty "sign s p == orignSign s p" $ \s p -> let m = sign s p in m == signOrig s p
 
 testSignWithCustomSeparator :: TestTree
 testSignWithCustomSeparator =
     testProperty
         "signWithSeparatorAndSalt timestamp defaultSeparator plain == signOrigWithSeparator defaultSeparator plain" $
         \sep secret plain ->
-             let m =
-                     rawMessage $
-                     signWithSeparatorAndSalt sep defaultSalt secret plain
-             in m ==
-                signOrigWithSeparator sep secret plain
+             signWithSeparatorAndSalt sep defaultSalt secret plain == signOrigWithSeparator sep secret plain
 
 testSignWithTimestamp :: TestTree
 testSignWithTimestamp =
@@ -80,17 +76,34 @@ testSignWithTimestamp =
         "signWithTimestampAndSeparator timestamp defaultSeparator plain == timestampSignOrigWithSeparator defaultSeparator plain" $
           \p ->
              let secret = "secret"
-                 sep = "/"
-                 enc = timestampSignOrigWithSeparator sep secret p
-                 mt = extractTimestamp sep p $ unsingOrigWithSigner Signer sep "secret" $ enc
+                 enc = timestampSignOrigWithSeparator defaultSeparator secret p
+                 mt = extractMessageAndTimestamp defaultSeparator . unsingOrigWithSigner Signer defaultSeparator "secret" $ enc
              in Just enc ==
-                (mt >>= \t -> return . rawMessage $ signWithTimestampAndSeparator t sep secret p)
+                (mt >>= \(_, t) -> return $ signWithTimestampAndSeparator t defaultSeparator secret p)
+
+testUnsingTimestampped :: TestTree
+testUnsingTimestampped =
+    testProperty
+        "unsingTimestampped enc == signWithTimestamp epoch plain" $
+        (\p ->
+              (unsignTimestampped (const False) "secret" $
+               signWithTimestamp 1293840001 "secret" p) == Right p)
 
 testSignFunctions :: TestTree
-testSignFunctions = testGroup "ItsDangerous sign functions" [ testSign, testSignWithCustomSeparator ]
+testSignFunctions =
+    testGroup
+        "ItsDangerous sign functions"
+        [ testSign
+        , testSignWithCustomSeparator
+        , testSignWithTimestamp]
+
+testUnsignFunctions :: TestTree
+testUnsignFunctions =
+    testGroup "ItsDangerous unsing functions" [testUnsingTimestampped]
 
 tests :: TestTree
-tests = testGroup "ItsItsDangerous" [ testSignFunctions, testSignWithCustomSeparator, testSignWithTimestamp ]
+tests =
+    testGroup "ItsItsDangerous" [testSignFunctions, testUnsignFunctions]
 
 main :: IO ()
 main = defaultMain tests
