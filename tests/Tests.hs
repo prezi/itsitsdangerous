@@ -1,21 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 module Main where
 
-import Data.ByteString (ByteString)
-import Data.ByteString.UTF8 (fromString)
-import Foreign.Python
-       (callObject, fromPy, getAttr, importModule, initialize, toPy,
-        PyObject)
-import ItsItsDangerous
-       (defaultSalt, Separator, Secret, defaultSeparator,
-        sign, signWithSeparatorAndSalt, extractMessageAndTimestamp, base64decode,
-        base64encode, signWithTimestampAndSeparator, attachTimestamp,
-        int2bytes, signWithTimestamp, unsignTimestampped)
-import System.IO.Unsafe (unsafePerformIO)
-import Test.QuickCheck (Arbitrary, arbitrary)
-import Test.Tasty (TestTree, defaultMain, testGroup)
-import Test.Tasty.HUnit (testCase, (@?=))
-import Test.Tasty.QuickCheck (testProperty)
+import           Data.ByteString          (ByteString)
+import           Data.ByteString.UTF8     (fromString)
+import           Foreign.Python           (PyObject, callObject, fromPy,
+                                           getAttr, importModule, initialize,
+                                           toPy)
+import           ItsItsDangerous          (defaultSalt, defaultSeparator, sign,
+                                           signWithSeparatorAndSalt,
+                                           signWithTimestamp,
+                                           signWithTimestampAndSeparator,
+                                           unsignTimestampped)
+import           ItsItsDangerous.Internal (extractMessageAndTimestamp)
+import           ItsItsDangerous.Types    (Secret, Separator)
+import           System.IO.Unsafe         (unsafePerformIO)
+import           Test.QuickCheck          (Arbitrary, arbitrary)
+import           Test.Tasty               (TestTree, defaultMain, testGroup)
+import           Test.Tasty.QuickCheck    (testProperty)
 
 instance Arbitrary ByteString where
   arbitrary   = fmap fromString arbitrary
@@ -34,14 +35,22 @@ constructSignerInstance signer separator secret = do
     separator' <- toPy separator
     callObject signerClass [secret', salt', separator'] []
 
-signOrigWithSigner :: OrigSigner -> Separator -> Secret -> ByteString -> ByteString
+signOrigWithSigner :: OrigSigner
+                   -> Separator
+                   -> Secret
+                   -> ByteString
+                   -> ByteString
 signOrigWithSigner signer separator secret plain = unsafePerformIO $ do
     signerInstance <- constructSignerInstance signer separator secret
     plain' <- toPy plain
     signMethod <- getAttr signerInstance "sign"
     callObject signMethod [plain'] [] >>= fromPy
 
-unsingOrigWithSigner :: OrigSigner -> Separator -> Secret -> ByteString -> ByteString
+unsingOrigWithSigner :: OrigSigner
+                     -> Separator
+                     -> Secret
+                     -> ByteString
+                     -> ByteString
 unsingOrigWithSigner signer separator secret enc = unsafePerformIO $ do
     signerInstance <- constructSignerInstance signer separator secret
     enc' <- toPy enc
@@ -55,7 +64,10 @@ signOrigWithSeparator separator secret plain =
 signOrig :: ByteString -> ByteString -> ByteString
 signOrig = signOrigWithSeparator defaultSeparator
 
-timestampSignOrigWithSeparator :: Separator -> Secret -> ByteString -> ByteString
+timestampSignOrigWithSeparator :: Separator
+                               -> Secret
+                               -> ByteString
+                               -> ByteString
 timestampSignOrigWithSeparator separator secret plain =
     signOrigWithSigner TimestampSigner separator secret plain
 

@@ -17,8 +17,9 @@ extra-source-files:  README.md
 cabal-version:       >=1.10
 
 library
-  exposed-modules:     ItsItsDangerous
-  -- other-modules:
+  exposed-modules:     ItsItsDangerous,
+                       ItsItsDangerous.Internal,
+                       ItsItsDangerous.Types
   other-extensions:    EmptyDataDecls,
                        OverloadedStrings,
                        DeriveDataTypeable,
