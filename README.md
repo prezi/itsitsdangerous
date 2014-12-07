@@ -15,7 +15,7 @@ and here is related and really nice blogpost by the same Author:
 http://www.lunaryorn.com/2014/04/15/calling-python-from-haskell.html
 
 ### Testing
-To run tests:
+To run tests you have to install original, python itsdangerous library and then run:
 
     cabal install --enable-tests
     cabal test
