@@ -34,36 +34,37 @@ rsplit separator buffer = do
 -- strip '=' chars from the end of encoded string
 base64encode :: ByteString -> ByteString
 base64encode =
-  fst . BS.spanEnd (== (fromIntegral $ ord '='))
-      . replaceStrict "/" "_" . replaceStrict "+" "-"
-      . Data.ByteString.Base64.encode
+    fst . BS.spanEnd (== (fromIntegral $ ord '='))
+        . replaceStrict "/" "_" . replaceStrict "+" "-"
+        . Data.ByteString.Base64.encode
 
 replaceStrict :: ByteString -> ByteString -> ByteString -> ByteString
 replaceStrict f t s = toStrict $ replace f t s
 
 base64decode :: ByteString -> Either String ByteString
 base64decode e =
-  decode e
+    decode e
   where
-  suffix = BS.pack $ replicate (4 - (BS.length e `mod` 4)) (fromIntegral $ ord '=')
-  decode = Data.ByteString.Base64.decode . replaceStrict "_" "/"
-                                         . replaceStrict "-" "+"
-                                         . (`BS.append` suffix)
+    suffix = BS.pack $ replicate (4 - (BS.length e `mod` 4)) (fromIntegral $ ord '=')
+    decode = Data.ByteString.Base64.decode . replaceStrict "_" "/"
+                                           . replaceStrict "-" "+"
+                                           . (`BS.append` suffix)
 
 derivateKey :: Salt -> Secret -> Key
 derivateKey salt secret =
-  hash key
+    hash key
   where
-  key = salt `BS.append` ("signer"::ByteString) `BS.append` secret
+    key = salt `BS.append` ("signer"::ByteString) `BS.append` secret
 
 bytes2int :: ByteString -> Integer
 bytes2int = BS.foldl (\b a -> shiftL b 8 .|. toInteger a) 0
 
 int2bytes :: Integer -> ByteString
-int2bytes = BS.pack . reverse . int2bytes'
+int2bytes =
+    BS.pack . reverse . int2bytes'
   where
-  int2bytes' y | y <= 0 = []
-               | otherwise = fromInteger (y .&. 0xff) : int2bytes' (shiftR y 8)
+    int2bytes' y | y <= 0 = []
+                 | otherwise = fromInteger (y .&. 0xff) : int2bytes' (shiftR y 8)
 
 epoch :: Timestamp
 epoch = 1293840000
