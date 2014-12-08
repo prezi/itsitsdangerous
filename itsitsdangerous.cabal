@@ -32,6 +32,7 @@ library
                        bytestring,
                        Crypto,
                        cryptohash,
+                       securemem,
                        stringsearch,
                        utf8-string
   hs-source-dirs:      src
@@ -59,6 +60,7 @@ test-suite tests
                        HUnit,
                        itsitsdangerous,
                        QuickCheck,
+                       securemem,
                        stringsearch,
                        tasty,
                        tasty-hunit,

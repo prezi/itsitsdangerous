@@ -9,6 +9,7 @@ module ItsItsDangerous
 import           Data.ByteString          (ByteString)
 import qualified Data.ByteString          as BS
 import           Data.HMAC                (hmac_sha1)
+import           Data.SecureMem           (toSecureMem)
 import           ItsItsDangerous.Internal (attachTimestamp, base64encode,
                                            derivateKey,
                                            extractMessageAndTimestamp, rsplit)
@@ -58,7 +59,8 @@ unsign separator salt secret encrypted =
           (rsplit separator encrypted)
   where
     validate :: Plain -> Encrypted -> Bool
-    validate plain = (signature salt secret plain ==)
+    validate plain enc =
+        (toSecureMem . signature salt secret $ plain) == toSecureMem enc
 
 
 unsignTimestamppedWithSeparatorAndSalt :: HasExpired
@@ -69,7 +71,7 @@ unsignTimestamppedWithSeparatorAndSalt :: HasExpired
                                        -> Either UnsingError Plain
 unsignTimestamppedWithSeparatorAndSalt hasExpired separator salt secret encrypted = do
     plain <- unsign separator salt secret encrypted
-    let m = extractMessageAndTimestamp separator $ plain
+    let m = extractMessageAndTimestamp separator plain
     maybe
         (Left BadSignature)
         (\(p, t) ->
