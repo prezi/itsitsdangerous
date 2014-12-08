@@ -73,7 +73,7 @@ unsignTimestamppedWithSeparatorAndSalt hasExpired separator salt secret encrypte
     maybe
         (Left BadSignature)
         (\(p, t) ->
-              if hasExpired t
+              if hasExpired t p
                   then Left SignatureExpired
                   else return p)
         m

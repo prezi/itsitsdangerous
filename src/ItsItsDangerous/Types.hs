@@ -12,7 +12,7 @@ type Plain     = ByteString
 type Encrypted = ByteString
 type Signature = ByteString
 
-type HasExpired = Timestamp -> Bool
+type HasExpired = Timestamp -> Plain -> Bool
 data UnsingError = SignatureExpired | BadSignature
                    deriving (Eq, Show)
 

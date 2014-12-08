@@ -98,7 +98,7 @@ testUnsingTimestampped =
     testProperty
         "unsingTimestampped enc == signWithTimestamp epoch plain" $
         (\p ->
-              (unsignTimestampped (const False) "secret" $
+              (unsignTimestampped (const . const $ False) "secret" $
                signWithTimestamp 1293840001 "secret" p) == Right p)
 
 testSignFunctions :: TestTree
