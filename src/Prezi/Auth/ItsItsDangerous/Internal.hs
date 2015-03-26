@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
-module ItsItsDangerous.Internal where
+module Prezi.Auth.ItsItsDangerous.Internal where
 
-import           Crypto.Hash.SHA1       (hash)
-import           Data.Bits              (shiftL, shiftR, (.&.), (.|.))
+import           Data.HMAC
+import           Data.Bits              (shiftL, shiftR, (.|.))
 import           Data.ByteString        (ByteString)
 import qualified Data.ByteString        as BS
 import qualified Data.ByteString.Base64
@@ -10,8 +10,8 @@ import           Data.ByteString.Lazy   (toStrict)
 import           Data.ByteString.Search (replace)
 import qualified Data.ByteString.Unsafe as BSU
 import           Data.Char              (ord)
-import           ItsItsDangerous.Types  (Key, Plain, Salt, Secret, Separator,
-                                         Timestamp)
+import           Data.Int
+import           Prezi.Auth.ItsItsDangerous.Types
 
 rsplit :: Separator  -- ^ String to search for.
        -> ByteString -- ^ String to search in.
@@ -26,6 +26,14 @@ rsplit separator buffer = do
         | BS.null b                   = i
         | separator `BS.isPrefixOf` b = rsplit' (BSU.unsafeTail b) (c+1) (Just c)
         | otherwise                   = rsplit' (BSU.unsafeTail b) (c+1) i
+
+rsplitE :: Separator  -- ^ String to search for.
+        -> ByteString -- ^ String to search in.
+        -> Either String (ByteString, ByteString) -- ^ prefix and sufix without separator
+rsplitE separator string =
+  case rsplit separator string of
+    Nothing -> Left $ "Cannot find " ++ show separator ++ " in " ++ show string
+    Just (a, b) -> Right (a, b)
 
 -- itsdangerous url safe version of base64 encoding/decoding
 -- replace in encoded string:
@@ -45,38 +53,25 @@ base64decode :: ByteString -> Either String ByteString
 base64decode e =
     decode e
   where
-    suffix = BS.pack $ replicate (4 - (BS.length e `mod` 4)) (fromIntegral $ ord '=')
+    suffix = BS.pack $ replicate ((-BS.length e) `mod` 4) (fromIntegral $ ord '=')
     decode = Data.ByteString.Base64.decode . replaceStrict "_" "/"
                                            . replaceStrict "-" "+"
                                            . (`BS.append` suffix)
 
-derivateKey :: Salt -> Secret -> Key
-derivateKey salt secret =
-    hash key
-  where
-    key = salt `BS.append` ("signer"::ByteString) `BS.append` secret
+derivateKey :: KeyDerivation -> Salt -> Secret -> Key
+derivateKey keyDerivation salt secret =
+  case keyDerivation of
+    Concat -> salt `BS.append` secret
+    DjangoConcat -> salt `BS.append` ("signer" :: ByteString) `BS.append` secret
+    Hmac -> BS.pack $ hmac_sha1 (BS.unpack secret) (BS.unpack salt)
 
-bytes2int :: ByteString -> Integer
-bytes2int = BS.foldl (\b a -> shiftL b 8 .|. toInteger a) 0
+bytes2int :: ByteString -> Int64
+bytes2int = BS.foldl (\b a -> shiftL b 8 .|. fromIntegral a) 0
 
-int2bytes :: Integer -> ByteString
+int2bytes :: Int64 -> ByteString
 int2bytes =
     BS.pack . reverse . int2bytes'
   where
     int2bytes' y | y <= 0 = []
-                 | otherwise = fromInteger (y .&. 0xff) : int2bytes' (shiftR y 8)
-
-epoch :: Timestamp
-epoch = 1293840000
-
-attachTimestamp :: Timestamp -> Separator -> ByteString -> ByteString
-attachTimestamp timestamp separator plain =
-    plain `BS.append` separator `BS.append`
-    (base64encode .  int2bytes .  (\x -> x - epoch) $ timestamp)
-
-extractMessageAndTimestamp :: Separator -> ByteString -> Maybe (Plain, Timestamp)
-extractMessageAndTimestamp separator plain = do
-    (p, t) <- rsplit separator plain
-    t' <- either (const Nothing) Just .  base64decode $ t
-    return . (,) p . (epoch +) . bytes2int $ t'
+                 | otherwise = fromIntegral y : int2bytes' (shiftR y 8)
 
