@@ -1,16 +1,16 @@
-{-# LANGUAGE OverloadedStrings, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE RecordWildCards   #-}
 module Prezi.Auth.ItsItsDangerous
   ( module Prezi.Auth.ItsItsDangerous.Types
   , sign, unsign
   )
   where
 
-import qualified Codec.Compression.Zlib as Zlib
-import           Control.Applicative
+import qualified Codec.Compression.Zlib              as Zlib
 import           Control.Exception
 import           Control.Monad.Except
-import qualified Data.ByteString          as BS
-import qualified Data.ByteString.Lazy     as BSL
+import qualified Data.ByteString                     as BS
+import qualified Data.ByteString.Lazy                as BSL
 import           Data.HMAC
 import           Data.Int
 import           Data.SecureMem
